@@ -1,9 +1,11 @@
 /**
  * Main Web Audio Engine Controller for SUBTRAKTOR-140.
- * Manages AudioContext, AudioWorkletNode, AnalyserNode, UK Drum Backing,
+ * Manages AudioContext, AudioWorkletNode (with automatic ScriptProcessorNode fallback
+ * for CSP/sandboxed side-panel iframes), AnalyserNode, UK Drum Backing,
  * lookahead 140 BPM Step Sequencer, and Web MIDI hardware input.
  */
 
+import { SubtraktorDspEngine } from './dspCore';
 import { UkDrumEngine, type DrumGroove } from './drumEngine';
 import type { SequencerStep, SubtractorPatch } from './types';
 import workletUrl from './subtraktor.worklet.ts?worker&url';
@@ -17,6 +19,8 @@ export interface MidiStatus {
 export class SubtraktorSynthEngine {
   private ctx: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
+  private scriptNode: ScriptProcessorNode | null = null;
+  private fallbackDsp: SubtraktorDspEngine | null = null;
   private analyser: AnalyserNode | null = null;
   private masterGain: GainNode | null = null;
   private drumEngine: UkDrumEngine | null = null;
@@ -49,7 +53,7 @@ export class SubtraktorSynthEngine {
   }
 
   async ensureStarted(): Promise<void> {
-    if (this.ctx && this.workletNode) {
+    if (this.ctx && (this.workletNode || this.scriptNode)) {
       if (this.ctx.state === 'suspended') {
         await this.ctx.resume();
       }
@@ -62,19 +66,13 @@ export class SubtraktorSynthEngine {
     }
 
     this.readyPromise = (async () => {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx({ latencyHint: 'interactive' });
       if (this.ctx.state === 'suspended') {
         await this.ctx.resume();
       }
-
-      await this.ctx.audioWorklet.addModule(workletUrl);
-
-      this.workletNode = new AudioWorkletNode(this.ctx, 'subtraktor-processor', {
-        numberOfInputs: 0,
-        numberOfOutputs: 1,
-        outputChannelCount: [2],
-      });
 
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = 0.92;
@@ -83,19 +81,49 @@ export class SubtraktorSynthEngine {
       this.analyser.fftSize = 2048;
       this.analyser.smoothingTimeConstant = 0.78;
 
-      this.workletNode.connect(this.masterGain);
       this.masterGain.connect(this.analyser);
       this.analyser.connect(this.ctx.destination);
 
-      // Drum machine feeds master destination (post-synth so oscilloscope focuses on synth or mix)
       this.drumEngine = new UkDrumEngine(this.ctx, this.masterGain);
       this.drumEngine.setVolume(this.drumVolume);
 
-      this.workletNode.port.postMessage({
-        type: 'init',
-        patch: this.currentPatch,
-        bpm: this.bpm,
-      });
+      // Try AudioWorklet first; fall back seamlessly to ScriptProcessorNode
+      // in CSP-restricted / single-file side-panel iframes.
+      let workletReady = false;
+      if (this.ctx.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+        try {
+          await this.ctx.audioWorklet.addModule(workletUrl);
+          this.workletNode = new AudioWorkletNode(this.ctx, 'subtraktor-processor', {
+            numberOfInputs: 0,
+            numberOfOutputs: 1,
+            outputChannelCount: [2],
+          });
+          this.workletNode.connect(this.masterGain);
+          this.workletNode.port.postMessage({
+            type: 'init',
+            patch: this.currentPatch,
+            bpm: this.bpm,
+          });
+          workletReady = true;
+        } catch {
+          workletReady = false;
+        }
+      }
+
+      if (!workletReady) {
+        const dsp = new SubtraktorDspEngine(this.ctx.sampleRate, this.currentPatch);
+        dsp.setBpm(this.bpm);
+        this.fallbackDsp = dsp;
+
+        const sp = this.ctx.createScriptProcessor(512, 0, 2);
+        sp.onaudioprocess = (ev) => {
+          const outL = ev.outputBuffer.getChannelData(0);
+          const outR = ev.outputBuffer.getChannelData(1);
+          dsp.processBlock(outL, outR);
+        };
+        sp.connect(this.masterGain);
+        this.scriptNode = sp;
+      }
     })();
 
     await this.readyPromise;
@@ -106,22 +134,25 @@ export class SubtraktorSynthEngine {
   }
 
   isReady(): boolean {
-    return this.ctx !== null && this.workletNode !== null;
+    return this.ctx !== null && (this.workletNode !== null || this.scriptNode !== null);
   }
 
   setPatch(patch: SubtractorPatch): void {
     this.currentPatch = { ...patch };
     this.workletNode?.port.postMessage({ type: 'setPatch', patch: this.currentPatch });
+    this.fallbackDsp?.setPatch(this.currentPatch);
   }
 
   setParam<K extends keyof SubtractorPatch>(key: K, value: SubtractorPatch[K]): void {
     this.currentPatch[key] = value;
     this.workletNode?.port.postMessage({ type: 'setParam', key, value });
+    this.fallbackDsp?.setParam(key, value);
   }
 
   setBpm(bpm: number): void {
     this.bpm = Math.max(60, Math.min(220, bpm));
     this.workletNode?.port.postMessage({ type: 'setBpm', bpm: this.bpm });
+    this.fallbackDsp?.setBpm(this.bpm);
   }
 
   setSwing(swing: number): void {
@@ -139,28 +170,34 @@ export class SubtraktorSynthEngine {
 
   setPitchBend(value: number): void {
     this.workletNode?.port.postMessage({ type: 'setPitchBend', value });
+    this.fallbackDsp?.setPitchBend(value);
   }
 
   setModWheel(value: number): void {
     this.workletNode?.port.postMessage({ type: 'setModWheel', value });
+    this.fallbackDsp?.setModWheel(value);
   }
 
   async noteOn(note: number, velocity = 0.88): Promise<void> {
     await this.ensureStarted();
     this.workletNode?.port.postMessage({ type: 'noteOn', note, velocity });
+    this.fallbackDsp?.noteOn(note, velocity);
   }
 
   noteOff(note: number): void {
     this.workletNode?.port.postMessage({ type: 'noteOff', note });
+    this.fallbackDsp?.noteOff(note);
   }
 
   allNotesOff(): void {
     this.workletNode?.port.postMessage({ type: 'allNotesOff' });
+    this.fallbackDsp?.allNotesOff();
   }
 
   panic(): void {
     this.stopSequencer();
     this.workletNode?.port.postMessage({ type: 'panic' });
+    this.fallbackDsp?.panic();
   }
 
   // ---- 140 BPM Step Sequencer ----
@@ -180,6 +217,7 @@ export class SubtraktorSynthEngine {
     this.currentStep = 0;
     this.nextStepTime = this.ctx.currentTime + 0.04;
     this.workletNode?.port.postMessage({ type: 'resetLfo1' });
+    this.fallbackDsp?.resetLfo1();
 
     const lookaheadMs = 20;
     const scheduleAheadSec = 0.1;
@@ -214,9 +252,7 @@ export class SubtraktorSynthEngine {
     const fireTime = baseTime + swingOffset;
     const delayMs = Math.max(0, (fireTime - this.ctx.currentTime) * 1000);
 
-    // Trigger Drums at exact Web Audio time
     const kicked = this.drumEngine?.triggerStep(stepIdx, fireTime, this.drumGroove) ?? false;
-
     const step = this.steps[stepIdx];
 
     window.setTimeout(() => {
@@ -226,18 +262,21 @@ export class SubtraktorSynthEngine {
       if (kicked || (this.drumGroove === 'off' && stepIdx % 4 === 0)) {
         if (this.currentPatch.fxSidechainAmount > 0.01) {
           this.workletNode?.port.postMessage({ type: 'triggerSidechain' });
+          this.fallbackDsp?.triggerSidechain();
         }
       }
 
       if (step && step.active) {
         const vel = Math.min(1, step.velocity * (step.accent ? 1.25 : 1));
         this.workletNode?.port.postMessage({ type: 'noteOn', note: step.note, velocity: vel });
+        this.fallbackDsp?.noteOn(step.note, vel);
         this.activeSeqNotes.add(step.note);
 
         const gateMs = (step.slide ? stepDur * 1.12 : stepDur * 0.78) * 1000;
         const noteToRelease = step.note;
         window.setTimeout(() => {
           this.workletNode?.port.postMessage({ type: 'noteOff', note: noteToRelease });
+          this.fallbackDsp?.noteOff(noteToRelease);
           this.activeSeqNotes.delete(noteToRelease);
         }, gateMs);
       }
@@ -310,8 +349,12 @@ export class SubtraktorSynthEngine {
 
   dispose(): void {
     this.stopSequencer();
+    this.scriptNode?.disconnect();
+    this.workletNode?.disconnect();
     this.ctx?.close();
     this.ctx = null;
     this.workletNode = null;
+    this.scriptNode = null;
+    this.fallbackDsp = null;
   }
 }

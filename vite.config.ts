@@ -1,7 +1,9 @@
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { viteSingleFile } from 'vite-plugin-singlefile';
 
-// https://vite.dev/config/
+const isSingleFile = process.env.BUILD_SINGLEFILE === '1';
+
 export default defineConfig({
-  plugins: [react()],
-})
+  plugins: isSingleFile ? [react(), viteSingleFile()] : [react()],
+});

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:standalone": "BUILD_SINGLEFILE=1 vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run"
@@ -22,6 +23,7 @@
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
+    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^5.1.1"
   }
 }
