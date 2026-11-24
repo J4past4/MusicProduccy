@@ -1,0 +1,1000 @@
+/* ==========================================================================
+   SUBTRAKTOR-140 — Hardware Rack Design System
+   Authentic Reason Subtractor inspired anodized slate-steel faceplate
+   ========================================================================== */
+
+:root {
+  /* Studio Desk & Rack Chassis */
+  --bg-studio: #111418;
+  --bg-rack-rail: #1a1f26;
+
+  /* Anodized Slate-Steel Faceplate (Reason Subtractor signature cool steel-blue) */
+  --panel-top: #343f4c;
+  --panel-mid: #2a333e;
+  --panel-bot: #222a33;
+  --module-bg: #202730;
+  --module-bg-deep: #181e25;
+  --module-border: #3d4a59;
+  --module-shadow: rgba(0, 0, 0, 0.55);
+
+  /* Silkscreen Typography */
+  --ink-primary: #e6edf5;
+  --ink-secondary: #9aa8b8;
+  --ink-muted: #6c7a8a;
+  --ink-gold: #e5b869;
+
+  /* Hardware LEDs & Accents (Warm Analog Amber / Orange-Red & Mint LCD) */
+  --led-amber: #ff7a1f;
+  --led-amber-glow: rgba(255, 122, 31, 0.55);
+  --led-red: #ff3b30;
+  --led-red-glow: rgba(255, 59, 48, 0.55);
+  --lcd-bg: #0c1412;
+  --lcd-border: #1e2d29;
+  --lcd-phosphor: #5cf2b6;
+  --lcd-amber: #ffb84d;
+
+  /* Controls */
+  --knob-body-1: #2e343d;
+  --knob-body-2: #161a20;
+  --knob-cap: #232830;
+  --fader-track: #0d1116;
+
+  /* Fonts */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: radial-gradient(circle at 50% 0%, #1b222c 0%, var(--bg-studio) 65%);
+  color: var(--ink-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.3;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 14px 28px;
+}
+
+/* Main Rack Unit Container */
+.rack-shell {
+  width: 100%;
+  max-width: 1460px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Brushed Anodized Rack Faceplate */
+.rack-unit {
+  position: relative;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.012) 0px,
+      rgba(255, 255, 255, 0.012) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    linear-gradient(180deg, var(--panel-top) 0%, var(--panel-mid) 45%, var(--panel-bot) 100%);
+  border: 1px solid #455364;
+  border-bottom-color: #12171d;
+  border-right-color: #181f27;
+  border-radius: 6px;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+  padding: 8px 18px 10px;
+}
+
+/* Authentic Rack-Ear Screws */
+.rack-screw {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #7c8999 0%, #3a434f 55%, #191e24 100%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+.rack-screw::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 1px;
+  right: 1px;
+  height: 1.5px;
+  background: rgba(10, 12, 16, 0.75);
+  transform: rotate(-32deg);
+}
+.rack-screw.tl { top: 8px; left: 5px; }
+.rack-screw.tr { top: 8px; right: 5px; }
+.rack-screw.bl { bottom: 8px; left: 5px; }
+.rack-screw.br { bottom: 8px; right: 5px; }
+
+/* ==========================================================================
+   TOP BAR (Logo, Patch Browser, LCD Scope, Master & Export)
+   ========================================================================== */
+.top-bar {
+  display: grid;
+  grid-template-columns: 230px minmax(280px, 1fr) 310px auto;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brand-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #f0f5fa;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.brand-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: #171c23;
+  color: var(--led-amber);
+  border: 1px solid rgba(255, 122, 31, 0.45);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.brand-sub {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--ink-secondary);
+  text-transform: uppercase;
+}
+
+/* Patch Browser Panel */
+.patch-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: var(--module-bg-deep);
+  border: 1px solid #354150;
+  border-top-color: #10151b;
+  border-radius: 4px;
+  padding: 6px 8px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.patch-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.patch-select {
+  flex: 1;
+  min-width: 0;
+  background: #0e1715;
+  color: var(--lcd-phosphor);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid #223832;
+  border-radius: 3px;
+  padding: 4px 7px;
+  outline: none;
+  cursor: pointer;
+}
+.patch-select:focus {
+  border-color: var(--lcd-phosphor);
+}
+
+.patch-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-secondary);
+  gap: 8px;
+}
+
+.patch-artist-ref {
+  color: var(--ink-gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hardware Action Buttons */
+.hw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(180deg, #3c4755 0%, #272f39 100%);
+  color: var(--ink-primary);
+  border: 1px solid #161b22;
+  border-top-color: #536274;
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  transition: background 0.1s ease, transform 0.06s ease;
+  white-space: nowrap;
+}
+.hw-btn:hover {
+  background: linear-gradient(180deg, #475464 0%, #303945 100%);
+}
+.hw-btn:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.hw-btn.primary {
+  background: linear-gradient(180deg, #d86519 0%, #9b430b 100%);
+  border-top-color: #ff9a52;
+  color: #fff;
+}
+.hw-btn.primary:hover {
+  background: linear-gradient(180deg, #eb7323 0%, #b04e0f 100%);
+}
+.hw-btn.active {
+  background: linear-gradient(180deg, #2b3540 0%, #1d242c 100%);
+  color: var(--led-amber);
+  border-color: rgba(255, 122, 31, 0.5);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+.hw-btn.icon-only {
+  padding: 4px 6px;
+}
+
+/* LCD Oscilloscope & Spectrum Display */
+.lcd-screen {
+  position: relative;
+  background: var(--lcd-bg);
+  border: 2px solid #192128;
+  border-top-color: #0b0f13;
+  border-bottom-color: #3b4756;
+  border-radius: 4px;
+  height: 64px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.85);
+}
+
+.lcd-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.lcd-overlay {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(92, 242, 182, 0.82);
+  letter-spacing: 0.06em;
+}
+
+.lcd-mode-toggle {
+  pointer-events: auto;
+  background: rgba(12, 20, 18, 0.75);
+  color: var(--lcd-phosphor);
+  border: 1px solid rgba(92, 242, 182, 0.35);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  padding: 1px 4px;
+  cursor: pointer;
+}
+
+.top-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.midi-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-secondary);
+  background: var(--module-bg-deep);
+  border: 1px solid #303b48;
+  border-radius: 3px;
+  padding: 3px 6px;
+}
+
+/* ==========================================================================
+   SUBTRACTOR SYNTH FACEPLATE GRID (2 Authentic Horizontal Rows of Modules)
+   ========================================================================== */
+.synth-faceplate {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.synth-row-top {
+  display: grid;
+  grid-template-columns: 165px 1.25fr 1.25fr 118px 1.3fr;
+  gap: 7px;
+}
+
+.synth-row-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.15fr 1.15fr 1.15fr;
+  gap: 7px;
+}
+
+/* Recessed Hardware Module Box */
+.module-box {
+  background: linear-gradient(180deg, var(--module-bg) 0%, var(--module-bg-deep) 100%);
+  border: 1px solid #384454;
+  border-top-color: #141920;
+  border-left-color: #181e26;
+  border-radius: 4px;
+  padding: 6px 7px 7px;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 4px;
+  margin-bottom: 1px;
+}
+
+.module-title {
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-primary);
+}
+
+.module-tag {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   HARDWARE CONTROLS: KNOB, FADER, LED BUTTON, WAVEFORM SELECTOR
+   ========================================================================== */
+.knob-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.knob-svg {
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.7));
+}
+
+.knob-label {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-secondary);
+  text-transform: uppercase;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.knob-val {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--ink-gold);
+  line-height: 1;
+}
+
+/* Recessed Vertical Fader (Signature Subtractor Filter & Envelope Sliders!) */
+.fader-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.fader-track {
+  position: relative;
+  width: 14px;
+  height: 78px;
+  background: var(--fader-track);
+  border: 1px solid #354150;
+  border-top-color: #070a0e;
+  border-radius: 3px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.9);
+}
+
+.fader-fill {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 2px;
+  background: linear-gradient(180deg, var(--led-amber) 0%, #8a3808 100%);
+  border-radius: 1px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.fader-cap {
+  position: absolute;
+  left: -4px;
+  width: 20px;
+  height: 11px;
+  transform: translateY(50%);
+  background: linear-gradient(180deg, #5d6a7a 0%, #2f3742 50%, #45505e 100%);
+  border: 1px solid #0e1217;
+  border-top-color: #8594a6;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}
+
+.fader-cap::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 4px;
+  height: 1.5px;
+  background: #f5f8fc;
+}
+
+/* LED Hardware Toggle Button */
+.led-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(180deg, #323c48 0%, #202730 100%);
+  border: 1px solid #12171d;
+  border-top-color: #4b596b;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--ink-secondary);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.1s ease;
+}
+.led-btn:hover {
+  color: var(--ink-primary);
+}
+.led-btn.on {
+  color: #fff;
+  border-color: rgba(255, 122, 31, 0.55);
+}
+
+.led-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2c1e16;
+  border: 1px solid #120d0a;
+  flex-shrink: 0;
+}
+.led-dot.on {
+  background: var(--led-amber);
+  box-shadow: 0 0 6px var(--led-amber-glow), 0 0 2px #fff;
+}
+.led-dot.red.on {
+  background: var(--led-red);
+  box-shadow: 0 0 6px var(--led-red-glow), 0 0 2px #fff;
+}
+.led-dot.green.on {
+  background: var(--lcd-phosphor);
+  box-shadow: 0 0 6px rgba(92, 242, 182, 0.65);
+}
+
+/* Waveform Selector LCD Strip */
+.wave-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #0d1614;
+  border: 1px solid #243631;
+  border-radius: 3px;
+  padding: 3px 5px;
+}
+
+.wave-preview-canvas {
+  width: 48px;
+  height: 24px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.wave-select-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--lcd-phosphor);
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+.wave-select-input option {
+  background: #131c1a;
+  color: var(--lcd-phosphor);
+}
+
+.wave-step-btn {
+  background: #1c2825;
+  color: var(--lcd-phosphor);
+  border: 1px solid #2b423b;
+  border-radius: 2px;
+  width: 18px;
+  height: 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wave-step-btn:hover {
+  background: #273934;
+}
+
+/* Segmented Selector Pills (Filter Mode, Phase Mode, LFO Dest, Mod Env Dest) */
+.seg-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.seg-btn {
+  flex: 1;
+  min-width: 28px;
+  background: #161c23;
+  color: var(--ink-secondary);
+  border: 1px solid #2d3845;
+  border-radius: 2px;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: center;
+}
+.seg-btn:hover {
+  color: var(--ink-primary);
+}
+.seg-btn.active {
+  background: #2a2018;
+  color: var(--led-amber);
+  border-color: var(--led-amber);
+  box-shadow: inset 0 0 6px rgba(255, 122, 31, 0.25);
+}
+
+/* Numeric Stepper (Octave / Semi / Polyphony) */
+.num-stepper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.num-stepper-box {
+  display: flex;
+  align-items: center;
+  background: #0d1614;
+  border: 1px solid #243631;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.num-stepper-val {
+  min-width: 24px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lcd-amber);
+  padding: 1px 2px;
+}
+.num-stepper-btn {
+  background: #1b242c;
+  color: var(--ink-primary);
+  border: none;
+  width: 15px;
+  height: 19px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+}
+.num-stepper-btn:hover {
+  background: #2a3743;
+}
+
+/* Grid helpers inside modules */
+.ctrl-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 6px;
+}
+.ctrl-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+  justify-items: center;
+}
+.ctrl-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  justify-items: center;
+}
+
+/* Envelope Graph Preview */
+.env-graph {
+  width: 100%;
+  height: 28px;
+  background: #0c1412;
+  border: 1px solid #21322d;
+  border-radius: 3px;
+  display: block;
+}
+
+/* ==========================================================================
+   UK RACK FX STRIP (Combinator / Scream 4 Inspired)
+   ========================================================================== */
+.fx-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* ==========================================================================
+   140 BPM UK BASSLINE SEQUENCER & DRUM MACHINE
+   ========================================================================== */
+.seq-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.seq-transport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.seq-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 4px;
+}
+
+.seq-step {
+  background: var(--module-bg-deep);
+  border: 1px solid #303b49;
+  border-radius: 4px;
+  padding: 4px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: border-color 0.08s ease, background 0.08s ease;
+}
+
+.seq-step.beat-start {
+  border-top: 2px solid #59697d;
+}
+
+.seq-step.playing {
+  border-color: var(--lcd-phosphor);
+  background: #172723;
+  box-shadow: 0 0 8px rgba(92, 242, 182, 0.28);
+}
+
+.seq-step-num {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--ink-muted);
+}
+
+.seq-gate-btn {
+  width: 100%;
+  height: 22px;
+  border-radius: 3px;
+  border: 1px solid #232c37;
+  background: #12171d;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.seq-gate-btn.active {
+  background: linear-gradient(180deg, #e06d1d 0%, #9b430b 100%);
+  border-color: #ff9c54;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(255, 122, 31, 0.35);
+}
+
+.seq-note-select {
+  width: 100%;
+  background: #0d1513;
+  color: var(--lcd-phosphor);
+  border: 1px solid #223530;
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 1px 0;
+  text-align: center;
+  cursor: pointer;
+}
+
+.seq-flags {
+  display: flex;
+  width: 100%;
+  gap: 2px;
+}
+
+.seq-flag-btn {
+  flex: 1;
+  background: #141a21;
+  border: 1px solid #2a3441;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  border-radius: 2px;
+  padding: 1px 0;
+  cursor: pointer;
+}
+.seq-flag-btn.slide.on {
+  background: #163029;
+  color: var(--lcd-phosphor);
+  border-color: var(--lcd-phosphor);
+}
+.seq-flag-btn.accent.on {
+  background: #361e12;
+  color: var(--led-amber);
+  border-color: var(--led-amber);
+}
+
+/* ==========================================================================
+   PLAYABLE KEYBOARD & PITCH / MOD WHEELS
+   ========================================================================== */
+.keyboard-dock {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.wheels-box {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: var(--module-bg-deep);
+  border: 1px solid #354150;
+  border-radius: 4px;
+  padding: 6px;
+}
+
+.wheel-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.wheel-track {
+  position: relative;
+  width: 24px;
+  height: 76px;
+  background: linear-gradient(90deg, #0b0e12 0%, #1d232b 50%, #0b0e12 100%);
+  border: 1px solid #3a4655;
+  border-radius: 4px;
+  cursor: ns-resize;
+  touch-action: none;
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.9);
+}
+
+.wheel-thumb {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  height: 14px;
+  transform: translateY(50%);
+  background: linear-gradient(180deg, #4b5563 0%, #1f252e 50%, #374151 100%);
+  border: 1px solid #090c0f;
+  border-radius: 2px;
+}
+.wheel-thumb::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 5px;
+  height: 2px;
+  background: var(--led-amber);
+}
+
+.piano-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.piano-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--ink-secondary);
+}
+
+.piano-keys {
+  position: relative;
+  display: flex;
+  height: 82px;
+  background: #0d1015;
+  border: 1px solid #2f3a47;
+  border-radius: 4px;
+  padding: 2px;
+  overflow: hidden;
+}
+
+.key-white {
+  position: relative;
+  flex: 1;
+  background: linear-gradient(180deg, #eef2f6 0%, #d4dce4 88%, #b9c4cf 100%);
+  border: 1px solid #6b7785;
+  border-radius: 0 0 3px 3px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 4px;
+  color: #3a4552;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  transition: background 0.04s ease;
+}
+.key-white.active {
+  background: linear-gradient(180deg, #ffd1a6 0%, #ff9947 100%);
+  color: #1c0f06;
+}
+
+.key-black {
+  position: absolute;
+  top: 2px;
+  height: 52px;
+  width: 2.7%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #323943 0%, #14181e 85%, #0a0d11 100%);
+  border: 1px solid #050709;
+  border-radius: 0 0 3px 3px;
+  z-index: 3;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 4px;
+  color: #9aa8b8;
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  box-shadow: 0 3px 5px rgba(0, 0, 0, 0.7);
+}
+.key-black.active {
+  background: linear-gradient(180deg, #ff8f3a 0%, #c9520a 100%);
+  color: #fff;
+}
+
+/* ==========================================================================
+   RESPONSIVE BREAKPOINTS
+   ========================================================================== */
+@media (max-width: 1220px) {
+  .top-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .synth-row-top {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .synth-row-bottom {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .fx-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .seq-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .top-bar,
+  .synth-row-top,
+  .synth-row-bottom,
+  .fx-strip,
+  .keyboard-dock {
+    grid-template-columns: 1fr;
+  }
+  .seq-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
