@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   CHOKE_LABELS,
   ENGINE_LABELS,
@@ -60,6 +60,7 @@ interface PadsViewProps {
   onTogglePadSolo: (padId: number) => void;
   onUpdatePad: (padId: number, patch: Partial<DrumPadConfig>) => void;
   onOpenEditor: () => void;
+  onPerformanceFx: (active: boolean, x: number, y: number) => void;
 }
 
 export const PadsView: React.FC<PadsViewProps> = ({
@@ -87,10 +88,22 @@ export const PadsView: React.FC<PadsViewProps> = ({
   onTogglePadSolo,
   onUpdatePad,
   onOpenEditor,
+  onPerformanceFx,
 }) => {
   const scopeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [fxPadOpen, setFxPadOpen] = useState(false);
+  const [xyActive, setXyActive] = useState(false);
+  const [xyPos, setXyPos] = useState<{ x: number; y: number }>({ x: 0.5, y: 0.25 });
   const selectedPad = pads[selectedPadId] ?? pads[0];
   const anySolo = pads.some((p) => p.solo);
+
+  const updateXy = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
+    const y = 1 - Math.max(0, Math.min(1, (e.clientY - rect.top) / Math.max(1, rect.height)));
+    setXyPos({ x, y });
+    onPerformanceFx(true, x, y);
+  };
 
   // Draw live master oscilloscope mini-monitor
   useEffect(() => {
@@ -324,25 +337,76 @@ export const PadsView: React.FC<PadsViewProps> = ({
         })}
       </div>
 
-      {/* Selected Pad Quick-Sculpt Macro Bar */}
+      {/* Selected Pad Quick-Sculpt Macro Bar OR Live XY DJ Performance FX Pad */}
       <div className="daw-macro-bar">
         <div className="daw-macro-bar__head">
           <div className="daw-macro-bar__title">
             <span className={`daw-color-dot daw-color-dot--${selectedPad.color}`} />
-            <strong>{selectedPad.name}</strong>
-            <span className="daw-macro-bar__eng">{ENGINE_LABELS[selectedPad.engine]}</span>
+            <strong>{fxPadOpen ? 'LIVE XY MASTER FX' : selectedPad.name}</strong>
+            <span className="daw-macro-bar__eng">
+              {fxPadOpen ? 'DJ FILTER + SPACE' : ENGINE_LABELS[selectedPad.engine]}
+            </span>
           </div>
-          <button
-            id="daw-btn-open-pad-edit"
-            type="button"
-            className="daw-pill-btn daw-pill-btn--amber"
-            onClick={onOpenEditor}
-          >
-            DEEP EDIT
-          </button>
+          <div style={{ display: 'flex', gap: '5px' }}>
+            <button
+              id="daw-btn-xy-fx"
+              type="button"
+              className={`daw-pill-btn ${fxPadOpen ? 'daw-pill-btn--amber' : ''}`}
+              onClick={() => {
+                if (fxPadOpen) {
+                  setXyActive(false);
+                  onPerformanceFx(false, 0.5, 0);
+                }
+                setFxPadOpen((v) => !v);
+              }}
+            >
+              {fxPadOpen ? 'MACROS' : 'XY FX'}
+            </button>
+            <button
+              id="daw-btn-open-pad-edit"
+              type="button"
+              className="daw-pill-btn daw-pill-btn--amber"
+              onClick={onOpenEditor}
+            >
+              DEEP EDIT
+            </button>
+          </div>
         </div>
 
-        <div className="daw-macro-bar__sliders">
+        {fxPadOpen ? (
+          <div
+            className={`daw-xy-pad ${xyActive ? 'is-active' : ''}`}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              setXyActive(true);
+              updateXy(e);
+            }}
+            onPointerMove={(e) => {
+              if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+              updateXy(e);
+            }}
+            onPointerUp={() => {
+              setXyActive(false);
+              onPerformanceFx(false, 0.5, 0);
+            }}
+            onPointerCancel={() => {
+              setXyActive(false);
+              onPerformanceFx(false, 0.5, 0);
+            }}
+          >
+            <span className="daw-xy-pad__corner daw-xy-pad__corner--tl">LPF + SPACE</span>
+            <span className="daw-xy-pad__corner daw-xy-pad__corner--tr">HPF + SPACE</span>
+            <span className="daw-xy-pad__corner daw-xy-pad__corner--bl">LPF DRY</span>
+            <span className="daw-xy-pad__corner daw-xy-pad__corner--br">HPF DRY</span>
+            <div className="daw-xy-pad__cross-x" />
+            <div
+              className="daw-xy-pad__puck"
+              style={{ left: `${xyPos.x * 100}%`, bottom: `${xyPos.y * 100}%` }}
+            />
+          </div>
+        ) : (
+          <div className="daw-macro-bar__sliders">
           <TouchSlider
             label="PITCH"
             value={selectedPad.pitch}
@@ -389,6 +453,7 @@ export const PadsView: React.FC<PadsViewProps> = ({
             onChange={(v) => onUpdatePad(selectedPad.id, { drive: v })}
           />
         </div>
+        )}
       </div>
     </section>
   );

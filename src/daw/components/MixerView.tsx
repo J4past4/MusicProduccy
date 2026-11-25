@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import type { DelayDivision, DrumPadConfig, MasterBusConfig } from '../types';
+import type { DelayDivision, DrumPadConfig, MasterBusConfig, MelodicTrackConfig } from '../types';
 import { TouchSlider } from './TouchSlider';
 
 interface MixerViewProps {
   pads: DrumPadConfig[];
+  melodic: MelodicTrackConfig;
   master: MasterBusConfig;
   padPeaks: Float32Array;
+  synthPeak: number;
   masterL: number;
   masterR: number;
   onUpdatePad: (padId: number, patch: Partial<DrumPadConfig>) => void;
+  onUpdateMelodic: (patch: Partial<MelodicTrackConfig>) => void;
   onUpdateMaster: (patch: Partial<MasterBusConfig>) => void;
   onAuditionPad: (padId: number) => void;
 }
@@ -17,11 +20,14 @@ const DELAY_DIVS: DelayDivision[] = ['1/16', '1/8', '1/8D', '1/4'];
 
 export const MixerView: React.FC<MixerViewProps> = ({
   pads,
+  melodic,
   master,
   padPeaks,
+  synthPeak,
   masterL,
   masterR,
   onUpdatePad,
+  onUpdateMelodic,
   onUpdateMaster,
   onAuditionPad,
 }) => {
@@ -158,6 +164,79 @@ export const MixerView: React.FC<MixerViewProps> = ({
                 </div>
               );
             })}
+
+            {/* Melodic Synth Track Strip */}
+            <div className={`daw-strip ${melodic.mute ? 'is-muted' : ''}`}>
+              <div className="daw-strip__head">
+                <span className="daw-strip__cap" style={{ background: '#06b6d4' }} />
+                <span className="daw-strip__name">SYNTH</span>
+              </div>
+
+              <div className="daw-strip__sends">
+                <div className="daw-strip__sendbar" title="Reverb Send">
+                  <span style={{ width: `${melodic.reverbSend * 100}%`, background: '#06b6d4' }} />
+                </div>
+                <div className="daw-strip__sendbar" title="Delay Send">
+                  <span style={{ width: `${melodic.delaySend * 100}%`, background: '#eab308' }} />
+                </div>
+              </div>
+
+              <div className="daw-strip__fader-area">
+                <div className="daw-strip__meter">
+                  <div
+                    className="daw-strip__meter-fill"
+                    style={{ height: `${Math.min(1, synthPeak) * 100}%` }}
+                  />
+                </div>
+                <div
+                  className="daw-vfader"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    handleVerticalFader(e, (v) => onUpdateMelodic({ volume: v }));
+                  }}
+                  onPointerMove={(e) => {
+                    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                    handleVerticalFader(e, (v) => onUpdateMelodic({ volume: v }));
+                  }}
+                  onDoubleClick={() => onUpdateMelodic({ volume: 0.72 })}
+                  role="slider"
+                  aria-label="Melodic Synth Volume"
+                  aria-valuemin={0}
+                  aria-valuemax={120}
+                  aria-valuenow={Math.round(melodic.volume * 100)}
+                >
+                  <div className="daw-vfader__track" />
+                  <div
+                    className="daw-vfader__fill"
+                    style={{ height: `${Math.min(100, (melodic.volume / 1.2) * 100)}%` }}
+                  />
+                  <div
+                    className="daw-vfader__cap"
+                    style={{ bottom: `calc(${Math.min(100, (melodic.volume / 1.2) * 100)}% - 10px)` }}
+                  />
+                </div>
+              </div>
+
+              <span className="daw-strip__db">{Math.round(melodic.volume * 100)}%</span>
+
+              <div className="daw-strip__ms">
+                <button
+                  type="button"
+                  className={`daw-ms-btn ${melodic.mute ? 'is-m' : ''}`}
+                  onClick={() => onUpdateMelodic({ mute: !melodic.mute })}
+                >
+                  M
+                </button>
+                <button
+                  type="button"
+                  className={`daw-ms-btn ${melodic.solo ? 'is-s' : ''}`}
+                  onClick={() => onUpdateMelodic({ solo: !melodic.solo })}
+                >
+                  S
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Pinned Master Strip */}

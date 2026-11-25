@@ -10,6 +10,7 @@ import {
   pitchRatio,
   synthesizeDrumHit,
 } from './drumDspCore';
+import { synthesizeMelodicEvent } from './melodicDspCore';
 import type {
   DawProject,
   DelayDivision,
@@ -45,6 +46,7 @@ export interface LiveMeters {
   masterL: number;
   masterR: number;
   padPeaks: Float32Array;
+  synthPeak: number;
   scope: Float32Array;
 }
 
@@ -95,9 +97,11 @@ export class DrumRackEngine {
 
   // Per-pad channels & cached rendered buffers
   private padChannels: PadChannelNodes[] = [];
+  private synthChannel: PadChannelNodes | null = null;
   private padBuffers: (AudioBuffer | null)[] = new Array(16).fill(null);
   private customRawSamples: (Float32Array | null)[] = new Array(16).fill(null);
   private padPeaks = new Float32Array(16);
+  private synthPeak = 0;
   private activeVoices: ActiveVoice[] = [];
 
   // Master & Send FX nodes
@@ -105,6 +109,7 @@ export class DrumRackEngine {
   private eqLow: BiquadFilterNode | null = null;
   private eqMid: BiquadFilterNode | null = null;
   private eqHigh: BiquadFilterNode | null = null;
+  private djFilter: BiquadFilterNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   private compMakeup: GainNode | null = null;
   private limiter: WaveShaperNode | null = null;
@@ -232,6 +237,12 @@ export class DrumRackEngine {
     this.eqHigh.type = 'highshelf';
     this.eqHigh.frequency.value = 8200;
 
+    // Master XY Performance DJ Filter (bypassed at 20kHz LP when inactive)
+    this.djFilter = ctx.createBiquadFilter();
+    this.djFilter.type = 'lowpass';
+    this.djFilter.frequency.value = 20000;
+    this.djFilter.Q.value = 0.7;
+
     // Bus Glue Compressor
     this.compressor = ctx.createDynamicsCompressor();
     this.compressor.attack.value = 0.008;
@@ -262,7 +273,8 @@ export class DrumRackEngine {
     this.masterSum.connect(this.eqLow);
     this.eqLow.connect(this.eqMid);
     this.eqMid.connect(this.eqHigh);
-    this.eqHigh.connect(this.compressor);
+    this.eqHigh.connect(this.djFilter);
+    this.djFilter.connect(this.compressor);
     this.compressor.connect(this.compMakeup);
     this.compMakeup.connect(this.limiter);
     this.limiter.connect(this.masterGain);
@@ -325,6 +337,21 @@ export class DrumRackEngine {
 
       this.padChannels.push({ input, panner, gain, reverbSend, delaySend });
     }
+
+    // Dedicated Melodic Synth Mixer Channel
+    const sIn = ctx.createGain();
+    const sPan = ctx.createStereoPanner();
+    const sGain = ctx.createGain();
+    const sRev = ctx.createGain();
+    const sDel = ctx.createGain();
+    sIn.connect(sPan);
+    sPan.connect(sGain);
+    sGain.connect(this.masterSum);
+    sGain.connect(sRev);
+    sGain.connect(sDel);
+    sRev.connect(this.reverbInput);
+    sDel.connect(this.delayInput);
+    this.synthChannel = { input: sIn, panner: sPan, gain: sGain, reverbSend: sRev, delaySend: sDel };
   }
 
   private rebuildPadBuffer(padId: number): void {
@@ -348,7 +375,8 @@ export class DrumRackEngine {
   private syncMixerNodes(): void {
     if (!this.ctx || this.padChannels.length === 0) return;
     const now = this.ctx.currentTime;
-    const anySolo = this.project.pads.some((p) => p.solo);
+    const melodic = this.project.melodic;
+    const anySolo = this.project.pads.some((p) => p.solo) || Boolean(melodic?.solo);
 
     for (let i = 0; i < 16; i++) {
       const pad = this.project.pads[i];
@@ -359,6 +387,14 @@ export class DrumRackEngine {
       ch.panner.pan.setTargetAtTime(pad.pan, now, 0.012);
       ch.reverbSend.gain.setTargetAtTime(pad.reverbSend, now, 0.015);
       ch.delaySend.gain.setTargetAtTime(pad.delaySend, now, 0.015);
+    }
+
+    if (this.synthChannel && melodic) {
+      const sAudible = anySolo ? melodic.solo && !melodic.mute : !melodic.mute;
+      this.synthChannel.gain.gain.setTargetAtTime(sAudible ? melodic.volume : 0, now, 0.012);
+      this.synthChannel.panner.pan.setTargetAtTime(melodic.pan, now, 0.012);
+      this.synthChannel.reverbSend.gain.setTargetAtTime(melodic.reverbSend, now, 0.015);
+      this.synthChannel.delaySend.gain.setTargetAtTime(melodic.delaySend, now, 0.015);
     }
   }
 
@@ -677,6 +713,13 @@ export class DrumRackEngine {
         }
       }
 
+      // Schedule Melodic Synth Track step (chords / bass / pluck / organ)
+      const mStep = pattern.melodicSteps?.[stepIdx];
+      if (mStep && mStep.active && mStep.notes.length > 0) {
+        const gateSec = Math.max(0.06, (mStep.lengthSteps || 2) * secPerStep * 0.92);
+        this.triggerMelodicNotes(mStep.notes, gateSec, mStep.velocity, stepTime);
+      }
+
       // Schedule UI playhead update synced to audio clock
       const uiStep = stepIdx;
       const uiPatIdx = patIdx;
@@ -714,6 +757,91 @@ export class DrumRackEngine {
     }
   }
 
+  /** Trigger a melodic note or chord live or from the sequencer */
+  public triggerMelodicNotes(
+    notes: number[],
+    gateSec = 0.28,
+    velocity = 0.85,
+    scheduledTime?: number
+  ): void {
+    if (!notes || notes.length === 0) return;
+    if (!this.ctx) {
+      void this.ensureAudioReady().then(() => {
+        this.triggerMelodicNotes(notes, gateSec, velocity);
+      });
+      return;
+    }
+    if (this.ctx.state === 'suspended') {
+      void this.ctx.resume();
+    }
+    if (!this.synthChannel || !this.project.melodic) return;
+
+    const when = scheduledTime ?? this.ctx.currentTime;
+    const mono = synthesizeMelodicEvent(
+      notes,
+      gateSec,
+      velocity,
+      this.project.melodic,
+      this.ctx.sampleRate
+    );
+    const buf = this.ctx.createBuffer(1, mono.length, this.ctx.sampleRate);
+    buf.getChannelData(0).set(mono);
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.synthChannel.input);
+    src.start(when);
+    src.stop(when + buf.duration + 0.02);
+
+    const delayMs = Math.max(0, (when - this.ctx.currentTime) * 1000);
+    if (delayMs < 10) {
+      this.synthPeak = Math.max(this.synthPeak, velocity * this.project.melodic.volume);
+    } else {
+      window.setTimeout(() => {
+        this.synthPeak = Math.max(this.synthPeak, velocity * this.project.melodic.volume);
+      }, delayMs);
+    }
+  }
+
+  /** Live XY Master Performance FX Pad (X: DJ LPF/HPF sweep, Y: Resonance + Space Wash) */
+  public setPerformanceFx(active: boolean, x: number, y: number): void {
+    if (!this.ctx || !this.djFilter || !this.reverbReturn) return;
+    const now = this.ctx.currentTime;
+    if (!active) {
+      this.djFilter.type = 'lowpass';
+      this.djFilter.frequency.setTargetAtTime(20000, now, 0.03);
+      this.djFilter.Q.setTargetAtTime(0.7, now, 0.03);
+      this.reverbReturn.gain.setTargetAtTime(0.65, now, 0.05);
+      return;
+    }
+
+    const cx = Math.max(0, Math.min(1, x));
+    const cy = Math.max(0, Math.min(1, y));
+
+    if (cx < 0.46) {
+      // Resonant Low-Pass Sweep (140Hz .. 14kHz)
+      const norm = cx / 0.46;
+      const hz = 140 * Math.pow(14000 / 140, norm);
+      this.djFilter.type = 'lowpass';
+      this.djFilter.frequency.setTargetAtTime(hz, now, 0.015);
+      this.djFilter.Q.setTargetAtTime(1.2 + cy * 7.5, now, 0.02);
+    } else if (cx > 0.54) {
+      // Resonant High-Pass Sweep (90Hz .. 5.2kHz)
+      const norm = (cx - 0.54) / 0.46;
+      const hz = 90 * Math.pow(5200 / 90, norm);
+      this.djFilter.type = 'highpass';
+      this.djFilter.frequency.setTargetAtTime(hz, now, 0.015);
+      this.djFilter.Q.setTargetAtTime(1.2 + cy * 7.5, now, 0.02);
+    } else {
+      this.djFilter.type = 'lowpass';
+      this.djFilter.frequency.setTargetAtTime(18000, now, 0.02);
+      this.djFilter.Q.setTargetAtTime(0.8, now, 0.02);
+    }
+
+    // Y-axis boosts Reverb Return Wash
+    this.reverbReturn.gain.setTargetAtTime(0.65 + cy * 0.95, now, 0.03);
+  }
+
   private playMetronomeClick(time: number, accent: boolean): void {
     if (!this.ctx || !this.masterGain) return;
     const osc = this.ctx.createOscillator();
@@ -728,7 +856,7 @@ export class DrumRackEngine {
     osc.stop(time + 0.03);
   }
 
-  /** Poll live L/R master peak levels, per-pad peaks, and master scope waveform */
+  /** Poll live L/R master peak levels, per-pad peaks, synth peak, and master scope waveform */
   public getLiveMeters(): LiveMeters {
     let masterL = 0;
     let masterR = 0;
@@ -751,11 +879,14 @@ export class DrumRackEngine {
       this.padPeaks[i] *= 0.86;
       if (this.padPeaks[i] < 0.005) this.padPeaks[i] = 0;
     }
+    this.synthPeak *= 0.86;
+    if (this.synthPeak < 0.005) this.synthPeak = 0;
 
     return {
       masterL: Math.min(1, masterL),
       masterR: Math.min(1, masterR),
       padPeaks: this.padPeaks,
+      synthPeak: Math.min(1, this.synthPeak),
       scope: this.scopeBuf,
     };
   }

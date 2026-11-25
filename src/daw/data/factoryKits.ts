@@ -10,6 +10,7 @@
 import {
   createEmptyPattern,
   DEFAULT_MASTER_BUS,
+  DEFAULT_MELODIC_TRACK,
   type DawProject,
   type DrumPadConfig,
   type DrumPattern,
@@ -325,6 +326,7 @@ export const FACTORY_KITS: FactoryKitPreset[] = [
     swing: 0.08,
     description: 'Booming tuned 808s, razor hi-hat rolls, crisp layered snares & dark FM bells.',
     pads: METRO_808_PADS,
+    melodic: { preset: 'pluck', rootMidi: 53, scale: 'minor', cutoff: 0.65, reverbSend: 0.34, delaySend: 0.3 },
     demoPattern: METRO_PAT_A,
     demoPatternB: METRO_PAT_B,
   },
@@ -336,6 +338,7 @@ export const FACTORY_KITS: FactoryKitPreset[] = [
     swing: 0.24,
     description: 'Punchy 909 club kicks, skippy 2-step hi-hats, crisp rims & organ stabs.',
     pads: UKG_909_PADS,
+    melodic: { preset: 'organ', rootMidi: 53, scale: 'minor', cutoff: 0.78, reverbSend: 0.24, delaySend: 0.22 },
     demoPattern: UKG_PAT_A,
     demoPatternB: UKG_PAT_B,
   },
@@ -347,6 +350,7 @@ export const FACTORY_KITS: FactoryKitPreset[] = [
     swing: 0.34,
     description: 'Saturated lo-fi kicks, crunchy vinyl snares, swung tape hats & warm upright bass.',
     pads: MPC_BOOMBAP_PADS,
+    melodic: { preset: 'rhodes', rootMidi: 50, scale: 'dorian', cutoff: 0.58, reverbSend: 0.32, delaySend: 0.18 },
     demoPattern: MPC_PAT_A,
   },
   {
@@ -357,6 +361,7 @@ export const FACTORY_KITS: FactoryKitPreset[] = [
     swing: 0.04,
     description: 'Tight high-energy DnB kicks, snappy jungle snares, ghost breaks & dub sirens.',
     pads: DNB_JUNGLE_PADS,
+    melodic: { preset: 'reese', rootMidi: 41, scale: 'minor', cutoff: 0.62, drive: 0.32, reverbSend: 0.16, delaySend: 0.12 },
     demoPattern: DNB_PAT_A,
   },
   {
@@ -367,6 +372,7 @@ export const FACTORY_KITS: FactoryKitPreset[] = [
     swing: 0.16,
     description: 'Authentic resonant log drums, rolling shaker grooves, congas & afro rims.',
     pads: AMAPIANO_PADS,
+    melodic: { preset: 'pad', rootMidi: 55, scale: 'minor', cutoff: 0.62, reverbSend: 0.42, delaySend: 0.22 },
     demoPattern: AMAPIANO_PAT_A,
   },
   {
@@ -377,6 +383,7 @@ export const FACTORY_KITS: FactoryKitPreset[] = [
     swing: 0.06,
     description: 'Gated reverb snares, Simmons pitch-drop toms, 808 cowbells & synth zaps.',
     pads: ELECTRO_PADS,
+    melodic: { preset: 'acid', rootMidi: 45, scale: 'minor', cutoff: 0.72, resonance: 0.52, drive: 0.28 },
     demoPattern: ELECTRO_PAT_A,
   },
 ];
@@ -397,6 +404,7 @@ export function createProjectFromKit(kit: FactoryKitPreset): DawProject {
     swing: kit.swing,
     kitId: kit.id,
     pads: kit.pads.map((p) => ({ ...p })),
+    melodic: { ...DEFAULT_MELODIC_TRACK, ...(kit.melodic ?? {}) },
     patterns,
     activePatternIndex: 0,
     songClips: [

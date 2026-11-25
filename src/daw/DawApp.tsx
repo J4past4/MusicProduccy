@@ -1,11 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  DEFAULT_MELODIC_TRACK,
+  type AgentChatMessage,
   type DawProject,
   type DawTab,
   type DrumPadConfig,
   type MasterBusConfig,
+  type MelodicTrackConfig,
   type NoteRepeatRate,
   type SixteenLevelsMode,
+  type StemExportTarget,
   type StepCell,
 } from './types';
 import { createProjectFromKit, FACTORY_KITS } from './data/factoryKits';
@@ -17,6 +21,7 @@ import {
   humanizePattern,
   shiftPadSteps,
 } from './data/patternTools';
+import { analyzeBeat, runCoProducerPrompt } from './ai/beatAgent';
 import { DrumRackEngine } from './audio/drumRackEngine';
 import { renderDawProjectToWav } from './audio/dawWavExport';
 import { downloadWav } from '../audio/wavExport';
@@ -24,6 +29,7 @@ import { TransportBar } from './components/TransportBar';
 import { PadsView } from './components/PadsView';
 import { SequencerView } from './components/SequencerView';
 import { PadEditorView } from './components/PadEditorView';
+import { AiProducerView } from './components/AiProducerView';
 import { MixerView } from './components/MixerView';
 import { ArrangerView } from './components/ArrangerView';
 import { App as SubtraktorApp } from '../App';
@@ -46,7 +52,10 @@ function loadInitialProject(): DawProject {
     if (raw) {
       const parsed = JSON.parse(raw) as DawProject;
       if (parsed && parsed.version === 1 && Array.isArray(parsed.pads) && parsed.pads.length === 16) {
-        return parsed;
+        return {
+          ...parsed,
+          melodic: { ...DEFAULT_MELODIC_TRACK, ...(parsed.melodic ?? {}) },
+        };
       }
     }
   } catch {
@@ -75,6 +84,16 @@ export const DawApp: React.FC = () => {
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  // AI Co-Producer chat feed
+  const [aiMessages, setAiMessages] = useState<AgentChatMessage[]>(() => [
+    {
+      id: 'welcome',
+      role: 'agent',
+      text: 'Welcome to PRODUCCY AI Studio. Tap a quick prompt chip or describe the beat you want — I can compose full grooves, tune 808s, write scale-locked synth hooks, sculpt DSP, auto-mix, and arrange your song.',
+      timestamp: 0,
+    },
+  ]);
+
   // Undo / Redo stacks
   const [undoStack, setUndoStack] = useState<DawProject[]>([]);
   const [redoStack, setRedoStack] = useState<DawProject[]>([]);
@@ -83,6 +102,7 @@ export const DawApp: React.FC = () => {
   const [masterL, setMasterL] = useState<number>(0);
   const [masterR, setMasterR] = useState<number>(0);
   const [padPeaks, setPadPeaks] = useState<Float32Array>(() => new Float32Array(16));
+  const [synthPeak, setSynthPeak] = useState<number>(0);
   const [scopeData, setScopeData] = useState<Float32Array>(() => new Float32Array(128));
   const [padFlash, setPadFlash] = useState<Record<number, number>>({});
   const padFlashRef = useRef<Record<number, number>>({});
@@ -157,6 +177,7 @@ export const DawApp: React.FC = () => {
           setMasterR(m.masterR);
           if (activeTab === 'mixer') {
             setPadPeaks(new Float32Array(m.padPeaks));
+            setSynthPeak(m.synthPeak);
           }
           if (activeTab === 'pads') {
             setScopeData(new Float32Array(m.scope));
@@ -416,13 +437,69 @@ export const DawApp: React.FC = () => {
     [handleUpdatePad, showToast]
   );
 
-  // Master Bus update
+  // Master Bus & Melodic Track updates
   const handleUpdateMaster = useCallback(
     (patch: Partial<MasterBusConfig>) => {
       commitProject((prev) => ({ ...prev, master: { ...prev.master, ...patch } }), false);
     },
     [commitProject]
   );
+
+  const handleUpdateMelodic = useCallback(
+    (patch: Partial<MelodicTrackConfig>) => {
+      commitProject((prev) => ({ ...prev, melodic: { ...prev.melodic, ...patch } }), false);
+    },
+    [commitProject]
+  );
+
+  // AI Co-Producer prompt execution
+  const handleRunAiPrompt = useCallback(
+    (promptText: string) => {
+      const clean = promptText.trim();
+      if (!clean) return;
+      const result = runCoProducerPrompt(project, clean);
+      commitProject(() => result.nextProject, true, result.dirtyPadIds);
+      engineRef.current?.updateProject(result.nextProject, result.dirtyPadIds);
+      if (result.dirtyPadIds.length > 0) {
+        engineRef.current?.invalidateAllPadBuffers();
+      }
+      const now = Date.now();
+      setAiMessages((prev) => [
+        ...prev,
+        { id: `u-${now}`, role: 'user', text: clean, timestamp: now },
+        {
+          id: `a-${now + 1}`,
+          role: 'agent',
+          text: result.summary,
+          actionsApplied: result.actionsApplied,
+          timestamp: now + 1,
+        },
+      ]);
+      showToast(result.actionsApplied[0] ?? 'AI Co-Producer updated beat');
+    },
+    [commitProject, project, showToast]
+  );
+
+  // Expose Live Browser Agent API (window.__PRODUCCY_AGENT__) for external AI agents
+  useEffect(() => {
+    const api = {
+      getProject: () => project,
+      analyzeBeat: () => analyzeBeat(project),
+      runPrompt: (promptText: string) => {
+        handleRunAiPrompt(promptText);
+        return true;
+      },
+      play: () => void engineRef.current?.start(),
+      stop: () => engineRef.current?.stop(),
+      triggerPad: (padId: number, velocity = 0.9, pitch = 0) =>
+        engineRef.current?.triggerPad(padId, velocity, pitch),
+      triggerChord: (notes: number[]) => engineRef.current?.triggerMelodicNotes(notes, 0.35, 0.85),
+    };
+    (window as unknown as { __PRODUCCY_AGENT__?: typeof api }).__PRODUCCY_AGENT__ = api;
+    return () => {
+      delete (window as unknown as { __PRODUCCY_AGENT__?: typeof api }).__PRODUCCY_AGENT__;
+    };
+  }, [handleRunAiPrompt, project]);
 
   // Step Sequencer operations
   const handleToggleStep = useCallback(
@@ -457,18 +534,19 @@ export const DawApp: React.FC = () => {
   );
 
   const handleExportWav = useCallback(
-    (mode: 'pattern' | 'song') => {
+    (mode: 'pattern' | 'song', stem: StemExportTarget = 'master') => {
       setIsExporting(true);
       window.setTimeout(() => {
         try {
           const custom = engineRef.current?.getCustomRawSamplesSnapshot() ?? [];
-          const wav = renderDawProjectToWav(project, mode, custom, 44100);
+          const wav = renderDawProjectToWav(project, mode, custom, 44100, stem);
           const patId = project.patterns[project.activePatternIndex]?.id ?? 'A';
           const slug = project.kitId.replace(/[^a-z0-9-]/gi, '');
+          const stemTag = stem === 'master' ? '' : `_${stem}`;
           const filename =
             mode === 'song'
-              ? `produccy_${slug}_song_${project.bpm}bpm.wav`
-              : `produccy_${slug}_pat${patId}_${project.bpm}bpm.wav`;
+              ? `produccy_${slug}_song${stemTag}_${project.bpm}bpm.wav`
+              : `produccy_${slug}_pat${patId}${stemTag}_${project.bpm}bpm.wav`;
           downloadWav(wav, filename);
           showToast(`Exported ${filename}`);
         } finally {
@@ -598,6 +676,7 @@ export const DawApp: React.FC = () => {
               }
               onUpdatePad={handleUpdatePad}
               onOpenEditor={() => setActiveTab('edit')}
+              onPerformanceFx={(active, x, y) => engineRef.current?.setPerformanceFx(active, x, y)}
             />
           )}
 
@@ -694,14 +773,29 @@ export const DawApp: React.FC = () => {
             />
           )}
 
+          {activeTab === 'ai' && (
+            <AiProducerView
+              project={project}
+              messages={aiMessages}
+              canUndo={undoStack.length > 0}
+              onRunPrompt={handleRunAiPrompt}
+              onUndo={handleUndo}
+              onUpdateMelodic={handleUpdateMelodic}
+              onAuditionChord={(notes) => engineRef.current?.triggerMelodicNotes(notes, 0.45, 0.86)}
+            />
+          )}
+
           {activeTab === 'mixer' && (
             <MixerView
               pads={project.pads}
+              melodic={project.melodic}
               master={project.master}
               padPeaks={padPeaks}
+              synthPeak={synthPeak}
               masterL={masterL}
               masterR={masterR}
               onUpdatePad={handleUpdatePad}
+              onUpdateMelodic={handleUpdateMelodic}
               onUpdateMaster={handleUpdateMaster}
               onAuditionPad={(id) => engineRef.current?.triggerPad(id, 0.9)}
             />
@@ -759,15 +853,15 @@ export const DawApp: React.FC = () => {
         {/* Toast Notification */}
         {toast && <div className="daw-toast" role="status">{toast}</div>}
 
-        {/* Bottom Thumb-Zone Navigation Bar */}
-        <nav className="daw-tabbar" aria-label="DAW Views">
+        {/* Bottom Thumb-Zone Navigation Bar (6 Pro Views) */}
+        <nav className="daw-tabbar daw-tabbar--6" aria-label="DAW Views">
           {(
             [
               {
                 id: 'pads',
                 label: 'PADS',
                 icon: (
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                  <svg width="17" height="17" viewBox="0 0 18 18" fill="currentColor">
                     <rect x="2" y="2" width="6" height="6" rx="1.4" />
                     <rect x="10" y="2" width="6" height="6" rx="1.4" />
                     <rect x="2" y="10" width="6" height="6" rx="1.4" />
@@ -779,7 +873,7 @@ export const DawApp: React.FC = () => {
                 id: 'seq',
                 label: 'SEQ',
                 icon: (
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+                  <svg width="17" height="17" viewBox="0 0 18 18" fill="currentColor">
                     <rect x="2" y="3" width="3" height="3" rx="0.8" />
                     <rect x="6.5" y="3" width="3" height="3" rx="0.8" opacity="0.35" />
                     <rect x="11" y="3" width="5" height="3" rx="0.8" />
@@ -796,16 +890,25 @@ export const DawApp: React.FC = () => {
                 id: 'edit',
                 label: 'EDIT',
                 icon: (
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7">
+                  <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7">
                     <path d="M2 9H4.5L6.5 4L9.5 14L12 7L13.5 9H16" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 ),
               },
               {
-                id: 'mixer',
-                label: 'MIXER',
+                id: 'ai',
+                label: 'AI',
                 icon: (
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7">
+                  <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <path d="M9 2L10.8 7.2L16 9L10.8 10.8L9 16L7.2 10.8L2 9L7.2 7.2L9 2Z" fill="currentColor" stroke="none" />
+                  </svg>
+                ),
+              },
+              {
+                id: 'mixer',
+                label: 'MIX',
+                icon: (
+                  <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7">
                     <line x1="4" y1="3" x2="4" y2="15" strokeLinecap="round" />
                     <line x1="9" y1="3" x2="9" y2="15" strokeLinecap="round" />
                     <line x1="14" y1="3" x2="14" y2="15" strokeLinecap="round" />
@@ -819,7 +922,7 @@ export const DawApp: React.FC = () => {
                 id: 'song',
                 label: 'SONG',
                 icon: (
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <svg width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6">
                     <rect x="2" y="3" width="6" height="4" rx="1" fill="currentColor" stroke="none" />
                     <rect x="9.5" y="3" width="6.5" height="4" rx="1" fill="currentColor" stroke="none" opacity="0.55" />
                     <rect x="2" y="9" width="10" height="4" rx="1" fill="currentColor" stroke="none" opacity="0.7" />

@@ -1,11 +1,13 @@
 /**
- * Offline 44.1 kHz 16-bit Stereo WAV Renderer for PRODUCCY Drum Rack.
+ * Offline 44.1 kHz 16-bit Stereo WAV & Multi-Stem Renderer for PRODUCCY Mobile DAW.
+ * Renders Drums (16 pads) + Melodic Synth Track + Choke Groups + Stereo Delay + Master Limiter.
  * Pure Float32Array offline mixdown — works identically in Browser & Node/Vitest.
  */
 
 import { encodeWav16Stereo } from '../../audio/wavExport';
 import { applyPadProcessing, pitchRatio, synthesizeDrumHit } from './drumDspCore';
-import type { DawProject, DrumPattern } from '../types';
+import { synthesizeMelodicEvent } from './melodicDspCore';
+import type { DawProject, DrumPattern, StemExportTarget } from '../types';
 
 interface RenderEvent {
   sample: number;
@@ -14,6 +16,13 @@ interface RenderEvent {
   pitchOffset: number;
   panOffset: number;
   chokeGroup: number;
+}
+
+interface MelodicRenderEvent {
+  sample: number;
+  notes: number[];
+  velocity: number;
+  gateSec: number;
 }
 
 function resampleLinear(src: Float32Array, rate: number): Float32Array {
@@ -31,18 +40,26 @@ function resampleLinear(src: Float32Array, rate: number): Float32Array {
   return out;
 }
 
+function padMatchesStem(padEngine: string, stem: StemExportTarget): boolean {
+  if (stem === 'master') return true;
+  if (stem === 'synth') return false;
+  const isLow = padEngine === 'kick' || padEngine === '808' || padEngine === 'logdrum';
+  return stem === 'drums-low' ? isLow : !isLow;
+}
+
 /**
- * Renders either the active pattern (barsOverride) or the entire Song Arrangement
- * into a 44.1 kHz 16-bit Stereo PCM WAV ArrayBuffer.
+ * Renders either the active pattern or full Song Arrangement into a 44.1 kHz 16-bit Stereo WAV.
+ * Supports full master mixdown or isolated pro stems ('drums-low', 'drums-top', 'synth').
  */
 export function renderDawProjectToWav(
   project: DawProject,
   mode: 'pattern' | 'song',
   customSamples: (Float32Array | null)[] = [],
-  sampleRate = 44100
+  sampleRate = 44100,
+  stem: StemExportTarget = 'master'
 ): ArrayBuffer {
   const secPerStep = 60 / Math.max(40, project.bpm) / 4;
-  const anySolo = project.pads.some((p) => p.solo);
+  const anySolo = project.pads.some((p) => p.solo) || Boolean(project.melodic?.solo);
 
   // Build ordered sequence of (pattern, totalStepsToPlay)
   const segments: { pattern: DrumPattern; stepsCount: number }[] = [];
@@ -61,12 +78,16 @@ export function renderDawProjectToWav(
   }
 
   const totalSteps = segments.reduce((acc, s) => acc + s.stepsCount, 0);
-  // Add 1.2s tail for reverb/delay/808 decay
-  const tailSamples = Math.floor(sampleRate * 1.2);
+  const tailSamples = Math.floor(sampleRate * 1.25);
   const totalSamples = Math.max(sampleRate, Math.ceil(totalSteps * secPerStep * sampleRate) + tailSamples);
 
-  // Collect all scheduled hit events
   const events: RenderEvent[] = [];
+  const melodicEvents: MelodicRenderEvent[] = [];
+  const melodicAudible =
+    (stem === 'master' || stem === 'synth') &&
+    Boolean(project.melodic) &&
+    (anySolo ? project.melodic.solo && !project.melodic.mute : !project.melodic.mute);
+
   let globalStep = 0;
 
   for (const seg of segments) {
@@ -75,36 +96,50 @@ export function renderDawProjectToWav(
       const swingOffset = stepIdx % 2 === 1 ? project.swing * secPerStep * 0.55 : 0;
       const baseTime = globalStep * secPerStep + swingOffset;
 
-      for (let padId = 0; padId < 16; padId++) {
-        const pad = project.pads[padId];
-        if (!pad) continue;
-        const audible = anySolo ? pad.solo && !pad.mute : !pad.mute;
-        if (!audible) continue;
+      if (stem !== 'synth') {
+        for (let padId = 0; padId < 16; padId++) {
+          const pad = project.pads[padId];
+          if (!pad || !padMatchesStem(pad.engine, stem)) continue;
+          const audible = anySolo ? pad.solo && !pad.mute : !pad.mute;
+          if (!audible) continue;
 
-        const cell = seg.pattern.steps[padId]?.[stepIdx];
-        if (!cell || !cell.active) continue;
+          const cell = seg.pattern.steps[padId]?.[stepIdx];
+          if (!cell || !cell.active) continue;
 
-        const ratchet = cell.ratchet || 1;
-        for (let r = 0; r < ratchet; r++) {
-          const hitTime = Math.max(0, baseTime + cell.nudge * secPerStep + (r * secPerStep) / ratchet);
-          const rVel = ratchet > 1 ? cell.velocity * (0.78 + 0.22 * (r / (ratchet - 1))) : cell.velocity;
-          events.push({
-            sample: Math.floor(hitTime * sampleRate),
-            padId,
-            velocity: rVel,
-            pitchOffset: cell.pitch,
-            panOffset: cell.pan,
-            chokeGroup: pad.chokeGroup,
+          const ratchet = cell.ratchet || 1;
+          for (let r = 0; r < ratchet; r++) {
+            const hitTime = Math.max(0, baseTime + cell.nudge * secPerStep + (r * secPerStep) / ratchet);
+            const rVel = ratchet > 1 ? cell.velocity * (0.78 + 0.22 * (r / (ratchet - 1))) : cell.velocity;
+            events.push({
+              sample: Math.floor(hitTime * sampleRate),
+              padId,
+              velocity: rVel,
+              pitchOffset: cell.pitch,
+              panOffset: cell.pan,
+              chokeGroup: pad.chokeGroup,
+            });
+          }
+        }
+      }
+
+      if (melodicAudible) {
+        const mStep = seg.pattern.melodicSteps?.[stepIdx];
+        if (mStep && mStep.active && mStep.notes.length > 0) {
+          melodicEvents.push({
+            sample: Math.floor(baseTime * sampleRate),
+            notes: mStep.notes,
+            velocity: mStep.velocity,
+            gateSec: Math.max(0.06, (mStep.lengthSteps || 2) * secPerStep * 0.92),
           });
         }
       }
+
       globalStep += 1;
     }
   }
 
   events.sort((a, b) => a.sample - b.sample);
 
-  // Pre-synthesize base buffers for each pad
   const baseBuffers: Float32Array[] = project.pads.map((pad, idx) => {
     const custom = customSamples[idx];
     if (pad.engine === 'sample' && custom) {
@@ -113,7 +148,6 @@ export function renderDawProjectToWav(
     return synthesizeDrumHit(pad, sampleRate, 1.0, 0);
   });
 
-  // Compute choke cutoffs for events sharing a choke group
   const chokeEndSample = new Int32Array(events.length).fill(totalSamples);
   for (let i = 0; i < events.length; i++) {
     const cg = events[i].chokeGroup;
@@ -131,7 +165,7 @@ export function renderDawProjectToWav(
   const delSendL = new Float32Array(totalSamples);
   const delSendR = new Float32Array(totalSamples);
 
-  // Mix all events into stereo buffers
+  // Mix Drum Events
   for (let idx = 0; idx < events.length; idx++) {
     const ev = events[idx];
     const pad = project.pads[ev.padId];
@@ -169,7 +203,30 @@ export function renderDawProjectToWav(
     }
   }
 
-  // Offline Stereo Ping-Pong Delay + Subtle Room Wash
+  // Mix Melodic Synth Events
+  if (melodicEvents.length > 0 && project.melodic) {
+    const mCfg = project.melodic;
+    const pan = Math.max(-1, Math.min(1, mCfg.pan));
+    const gainL = Math.cos(((pan + 1) * Math.PI) / 4) * mCfg.volume;
+    const gainR = Math.sin(((pan + 1) * Math.PI) / 4) * mCfg.volume;
+    const sendAmt = mCfg.delaySend * 0.45 + mCfg.reverbSend * 0.3;
+
+    for (const ev of melodicEvents) {
+      const buf = synthesizeMelodicEvent(ev.notes, ev.gateSec, ev.velocity, mCfg, sampleRate);
+      const maxEnd = Math.min(totalSamples, ev.sample + buf.length);
+      for (let pos = ev.sample; pos < maxEnd; pos++) {
+        const s = buf[pos - ev.sample];
+        dryL[pos] += s * gainL;
+        dryR[pos] += s * gainR;
+        if (sendAmt > 0.01) {
+          delSendL[pos] += s * gainL * sendAmt;
+          delSendR[pos] += s * gainR * sendAmt;
+        }
+      }
+    }
+  }
+
+  // Offline Stereo Ping-Pong Delay + Soft-Clip Limiter
   const beatSec = 60 / Math.max(40, project.bpm);
   const divBeats =
     project.master.delayDivision === '1/16'

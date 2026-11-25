@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import type { DawProject } from '../types';
+import type { DawProject, StemExportTarget } from '../types';
 
 interface ArrangerViewProps {
   project: DawProject;
@@ -11,7 +11,7 @@ interface ArrangerViewProps {
   onAddSongClip: (patternId: string) => void;
   onUpdateSongClipBars: (clipId: string, bars: number) => void;
   onRemoveSongClip: (clipId: string) => void;
-  onExportWav: (mode: 'pattern' | 'song') => void;
+  onExportWav: (mode: 'pattern' | 'song', stem?: StemExportTarget) => void;
   onExportProjectJson: () => void;
   onImportProjectJson: (file: File) => void;
   onResetKit: () => void;
@@ -187,10 +187,36 @@ export const ArrangerView: React.FC<ArrangerViewProps> = ({
               type="button"
               className="daw-export-btn"
               disabled={isExporting || project.songClips.length === 0}
-              onClick={() => onExportWav('song')}
+              onClick={() => onExportWav('song', 'master')}
             >
               {isExporting ? 'RENDERING...' : `EXPORT FULL SONG (${totalSongBars} BARS .WAV)`}
             </button>
+            <div className="daw-stem-row">
+              <button
+                type="button"
+                className="daw-tool-btn"
+                disabled={isExporting}
+                onClick={() => onExportWav(project.playMode, 'drums-low')}
+              >
+                STEM: KICK &amp; 808
+              </button>
+              <button
+                type="button"
+                className="daw-tool-btn"
+                disabled={isExporting}
+                onClick={() => onExportWav(project.playMode, 'drums-top')}
+              >
+                STEM: TOP DRUMS
+              </button>
+              <button
+                type="button"
+                className="daw-tool-btn"
+                disabled={isExporting}
+                onClick={() => onExportWav(project.playMode, 'synth')}
+              >
+                STEM: SYNTH
+              </button>
+            </div>
           </div>
         </div>
 

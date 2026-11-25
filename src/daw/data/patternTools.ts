@@ -3,7 +3,12 @@
  * Humanizer, Pattern Doubler, Shifter, and Deep Cloning helpers.
  */
 
-import { createEmptyStep, type DrumPattern, type StepCell } from '../types';
+import {
+  createEmptyMelodicLane,
+  createEmptyStep,
+  type DrumPattern,
+  type StepCell,
+} from '../types';
 
 /**
  * Generates a Euclidean rhythm distribution of `pulses` across `steps`
@@ -27,11 +32,13 @@ export function generateEuclidean(steps: number, pulses: number, rotation = 0): 
 }
 
 export function clonePattern(pattern: DrumPattern, newId?: string, newName?: string): DrumPattern {
+  const melodicSrc = pattern.melodicSteps ?? createEmptyMelodicLane();
   return {
     id: newId ?? pattern.id,
     name: newName ?? pattern.name,
     length: pattern.length,
     steps: pattern.steps.map((row) => row.map((cell) => ({ ...cell }))),
+    melodicSteps: melodicSrc.map((m) => ({ ...m, notes: [...m.notes] })),
   };
 }
 
@@ -80,6 +87,12 @@ export function doublePatternLength(pattern: DrumPattern): DrumPattern {
       next.steps[p][s + oldLen] = { ...next.steps[p][s] };
     }
   }
+  if (next.melodicSteps) {
+    for (let s = 0; s < oldLen; s++) {
+      const m = next.melodicSteps[s];
+      next.melodicSteps[s + oldLen] = { ...m, notes: [...m.notes] };
+    }
+  }
   return next;
 }
 
@@ -104,6 +117,7 @@ export function clearPattern(pattern: DrumPattern, padId?: number): DrumPattern 
     next.steps = Array.from({ length: 16 }, () =>
       Array.from({ length: 64 }, () => createEmptyStep())
     );
+    next.melodicSteps = createEmptyMelodicLane();
   }
   return next;
 }

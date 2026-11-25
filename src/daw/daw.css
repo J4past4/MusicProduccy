@@ -1786,3 +1786,317 @@
   color: #929cae;
   letter-spacing: 0.06em;
 }
+
+/* ==========================================================================
+   6-Tab Bar, Live XY Performance FX Pad, AI Co-Producer & Stem Export
+   ========================================================================== */
+
+.daw-tabbar--6 {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+/* Live XY Master DJ Performance FX Pad */
+.daw-xy-pad {
+  position: relative;
+  height: 92px;
+  border-radius: 9px;
+  background: radial-gradient(circle at 50% 50%, #1b2230 0%, #0a0c11 100%);
+  border: 1px solid var(--daw-border-hi);
+  touch-action: none;
+  cursor: crosshair;
+  overflow: hidden;
+}
+
+.daw-xy-pad.is-active {
+  border-color: rgba(245, 158, 11, 0.65);
+}
+
+.daw-xy-pad__cross-x {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.daw-xy-pad__corner {
+  position: absolute;
+  font-family: var(--daw-font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--daw-text-muted);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+.daw-xy-pad__corner--tl { top: 6px; left: 8px; }
+.daw-xy-pad__corner--tr { top: 6px; right: 8px; }
+.daw-xy-pad__corner--bl { bottom: 6px; left: 8px; }
+.daw-xy-pad__corner--br { bottom: 6px; right: 8px; }
+
+.daw-xy-pad__puck {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  margin-bottom: -9px;
+  border-radius: 50%;
+  background: var(--daw-amber);
+  border: 2px solid #0b0d12;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.65);
+  pointer-events: none;
+}
+
+/* AI Co-Producer Studio View */
+.daw-ai-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.daw-score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 7px;
+  background: var(--daw-well);
+  border: 1px solid var(--daw-border);
+  font-family: var(--daw-font-mono);
+}
+
+.daw-score-pill__key {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--daw-text-dim);
+}
+
+.daw-score-pill__num {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--daw-emerald);
+}
+
+.daw-diag-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.daw-diag-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: var(--daw-panel);
+  border: 1px solid var(--daw-border);
+  border-left-width: 3px;
+}
+
+.daw-diag-card--good { border-left-color: var(--daw-emerald); }
+.daw-diag-card--tip { border-left-color: var(--daw-amber); }
+.daw-diag-card--warn { border-left-color: var(--daw-red); }
+
+.daw-diag-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.daw-diag-card__text strong {
+  font-size: 11px;
+  color: var(--daw-text);
+}
+
+.daw-diag-card__text span {
+  font-size: 10px;
+  color: var(--daw-text-muted);
+}
+
+.daw-chip-strip {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.daw-chip-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.daw-prompt-chip {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--daw-border-hi);
+  background: linear-gradient(180deg, #1f2431 0%, #161a24 100%);
+  color: var(--daw-text);
+  font-family: var(--daw-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.daw-prompt-chip:active {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: var(--daw-amber);
+}
+
+.daw-ai-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0;
+}
+
+.daw-chat-msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--daw-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.daw-chat-msg--user {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.25);
+  align-self: flex-end;
+  max-width: 90%;
+}
+
+.daw-chat-msg--agent {
+  background: var(--daw-panel);
+  align-self: flex-start;
+  width: 100%;
+}
+
+.daw-chat-msg__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--daw-font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--daw-text-muted);
+}
+
+.daw-chat-undo {
+  border: 1px solid var(--daw-border);
+  border-radius: 4px;
+  background: var(--daw-well);
+  color: var(--daw-amber);
+  font-family: var(--daw-font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.daw-chat-msg__text {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--daw-text);
+}
+
+.daw-chat-actions {
+  margin: 2px 0 0;
+  padding: 6px 8px;
+  list-style: none;
+  border-radius: 7px;
+  background: var(--daw-well);
+  border: 1px solid var(--daw-border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--daw-font-mono);
+  font-size: 10px;
+  color: var(--daw-emerald);
+}
+
+.daw-ai-inputbar {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.daw-ai-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid var(--daw-border-hi);
+  background: var(--daw-well);
+  color: var(--daw-text);
+  font-family: var(--daw-font-ui);
+  font-size: 12px;
+  outline: none;
+}
+
+.daw-ai-input:focus {
+  border-color: var(--daw-amber);
+}
+
+/* Scale-Locked Chord Pads */
+.daw-chord-pads {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+
+.daw-chord-pad {
+  height: 46px;
+  border-radius: 8px;
+  border: 1px solid var(--daw-border-hi);
+  background: linear-gradient(180deg, #212734 0%, #161a24 100%);
+  color: var(--daw-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.daw-chord-pad:active {
+  background: rgba(6, 182, 212, 0.22);
+  border-color: rgba(6, 182, 212, 0.6);
+  transform: scale(0.96);
+}
+
+.daw-chord-pad strong {
+  font-family: var(--daw-font-mono);
+  font-size: 12px;
+  color: var(--daw-cyan);
+}
+
+.daw-chord-pad span {
+  font-family: var(--daw-font-mono);
+  font-size: 9px;
+  color: var(--daw-text-muted);
+}
+
+/* Multi-Stem Export Row */
+.daw-stem-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
